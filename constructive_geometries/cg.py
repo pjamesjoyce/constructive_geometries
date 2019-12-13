@@ -7,6 +7,10 @@ import json
 import os
 import wrapt
 
+import io
+import base64
+from .data import faces, faces_gpkg
+
 try:
     from shapely.geometry import shape, mapping
     from shapely.ops import cascaded_union
@@ -21,6 +25,11 @@ MISSING_GIS = (
     """Function not available: GIS libraries (fiona and shapely) not installed"""
 )
 
+print('this is the nofiles version')
+
+def _to_filelike(bytestring):
+    return io.BytesIO(base64.b64decode(bytestring))
+
 
 @wrapt.decorator
 def has_gis(wrapped, instance, args, kwargs):
@@ -31,13 +40,16 @@ def has_gis(wrapped, instance, args, kwargs):
         warn(MISSING_GIS)
 
 
-DATA_FILEPATH = os.path.join(os.path.dirname(__file__), "data")
+# DATA_FILEPATH = os.path.join(os.path.dirname(__file__), "data")
 
 
 def sha256(filepath, blocksize=65536):
     """Generate SHA 256 hash for file at `filepath`"""
     hasher = hashlib.sha256()
-    fo = open(filepath, "rb")
+    if not hasattr(filepath, 'read'):
+        fo = open(filepath, "rb")
+    else:
+        fo = filepath
     buf = fo.read(blocksize)
     while len(buf) > 0:
         hasher.update(buf)
@@ -57,6 +69,7 @@ def _to_fiona(data):
 
 @has_gis
 def _union(args):
+    print(len(args))
     label, fp, face_ids = args
     shapes = []
     with fiona.Env():
@@ -69,25 +82,33 @@ def _union(args):
 
 class ConstructiveGeometries(object):
     def __init__(self):
-        self.data_fp = os.path.join(DATA_FILEPATH, "faces.json")
-        self.faces_fp = os.path.join(DATA_FILEPATH, "faces.gpkg")
+        # self.data_fp = os.path.join(DATA_FILEPATH, "faces.json")
+        # self.faces_fp = os.path.join(DATA_FILEPATH, "faces.gpkg")
         self.check_data()
         self.load_definitions()
 
+    @property
+    def data_fp(self):
+        return _to_filelike(faces)
+
+    @property
+    def faces_fp(self):
+        return _to_filelike(faces_gpkg)
+
     def check_data(self):
         """Check that definitions file is present, and that faces file is readable."""
-        assert os.path.exists(self.data_fp)
+        # assert os.path.exists(self.data_fp)
         if gis:
             with fiona.Env():
                 with fiona.open(self.faces_fp) as src:
                     assert src.meta
 
-        gpkg_hash = json.load(open(self.data_fp))["metadata"]["sha256"]
+        gpkg_hash = json.load(self.data_fp)["metadata"]["sha256"]
         assert gpkg_hash == sha256(self.faces_fp)
 
     def load_definitions(self):
         """Load mapping of country names to face ids"""
-        self.data = dict(json.load(open(self.data_fp))["data"])
+        self.data = dict(json.load(self.data_fp)["data"])
         self.all_faces = set(self.data.pop("__all__"))
         self.locations = set(self.data.keys())
 
@@ -106,8 +127,7 @@ class ConstructiveGeometries(object):
         elif not gis:
             warn(MISSING_GIS)
             return
-
-        geom = _union(included)[1]
+        geom = _union((None, self.faces_fp, included))[1]
         if fp:
             self.write_geoms_to_file(fp, [geom], [name] if name else None)
             return fp
