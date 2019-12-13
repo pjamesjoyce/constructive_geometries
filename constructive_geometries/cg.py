@@ -25,8 +25,6 @@ MISSING_GIS = (
     """Function not available: GIS libraries (fiona and shapely) not installed"""
 )
 
-print('this is the nofiles version')
-
 def _to_filelike(bytestring):
     return io.BytesIO(base64.b64decode(bytestring))
 
