@@ -6,8 +6,8 @@ setup(
     version="0.7",
     packages=["constructive_geometries"],
     package_data={'constructive_geometries': [
-        "data/faces.gpkg",
-        "data/faces.json"
+        #"data/faces.gpkg",
+        #"data/faces.json"
     ]},
     author="Chris Mutel",
     author_email="cmutel@gmail.com",
